@@ -11,10 +11,14 @@ public class giver : MonoBehaviour
     public UnityEvent eventer;
     void OnMouseDown()
     {
-        if (Input.GetMouseButtonDown(0) && blub.itemID == inv.item.itemID)
+        if (inv.item != null)
         {
-            Debug.Log("ммм, вкусно");
-            //eventer.Invoke();
+            if (Input.GetMouseButtonDown(0) && blub.itemID == inv.item.itemID)
+            {
+                Debug.Log("ммм, вкусно");
+                //eventer.Invoke();
+            }
         }
+        
     }
 }
