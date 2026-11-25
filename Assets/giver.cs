@@ -9,16 +9,19 @@ public class giver : MonoBehaviour
     public bool hasItem;
     public inventory inv;
     public UnityEvent eventer;
+
+
     void OnMouseDown()
     {
         if (inv.item != null)
         {
             if (Input.GetMouseButtonDown(0) && blub.itemID == inv.item.itemID)
             {
-                Debug.Log("ммм, вкусно");
-                //eventer.Invoke();
+                eventer.Invoke();
             }
         }
+
         
+
     }
 }

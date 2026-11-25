@@ -5,12 +5,23 @@ using UnityEngine;
 public class inventory : MonoBehaviour
 {
     public Item item;
-
-    public void add(Item items)
+    public GameObject go;
+    public SpriteRenderer sr;
+    public AudioSource audioSource;
+    public void add(GameObject items)
     {
-        if (item == null)
-        {
-            item = items;
-        }
+        audioSource.Play();
+        //if (item == null)
+        //{
+        go = items;
+            item = go.GetComponent<Item>();
+            sr.sprite = go.GetComponent<SpriteRenderer>().sprite;
+        //}
+    }
+    public void give()
+    {
+        audioSource.Play();
+        go = null;
+        sr.sprite = null;
     }
 }

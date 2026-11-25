@@ -1,34 +1,59 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(SpriteRenderer))]
+[RequireComponent(typeof(Animator))] // Требуем наличие аниматора
 public class TopDownMovement : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private bool rotateToDirection = false;
+    [SerializeField] private float acceleration = 20f;
+    [SerializeField] private float deceleration = 25f;
 
     private Rigidbody2D rb;
-    private Vector2 moveInput;
+    private SpriteRenderer spriteRenderer;
+    private Animator animator; // --- НОВОЕ ---
+    private Vector2 currentVelocity;
+    private bool isMoving; // --- НОВОЕ ---
 
-    private void Awake()
+    void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        animator = GetComponent<Animator>(); // --- НОВОЕ ---
+        rb.gravityScale = 0f;
+        rb.freezeRotation = true;
     }
 
-    private void Update()
+    void Update()
     {
-        moveInput.x = Input.GetAxisRaw("Horizontal"); // A / D (+ стрелки)
-        moveInput.y = Input.GetAxisRaw("Vertical");   // W / S (+ стрелки)
-        moveInput = moveInput.normalized;             // фикс скорости по диагонали
+        Vector2 input = new Vector2(
+            Input.GetAxisRaw("Horizontal"),
+            Input.GetAxisRaw("Vertical")
+        ).normalized;
 
-        if (rotateToDirection && moveInput != Vector2.zero)
-        {
-            float angle = Mathf.Atan2(moveInput.y, moveInput.x) * Mathf.Rad2Deg;
-            rb.rotation = angle - 90f; // если спрайт "смотрит" вверх
-        }
+        // --- ЛОГИКА ПЕРЕВОРОТА ---
+        if (input.x < 0f) spriteRenderer.flipX = false;
+        else if (input.x> 0f) spriteRenderer.flipX = true;
+
+        // --- ЛОГИКА АНИМАЦИИ ---
+        // Проверяем, есть ли вообще ввод от игрока
+        isMoving = input != Vector2.zero;
+
+        // Передаем значение в Аниматор
+        animator.SetBool("isMoving", isMoving);
+
+        // Бонус: передаем скорость по осям X и Y (пригодится для анимаций ходьбы вверх/вниз)
+        animator.SetFloat("moveX", input.x);
+        animator.SetFloat("moveY", input.y);
+        // --------------------------
+
+        Vector2 targetVelocity = input * moveSpeed;
+        float rate = (input == Vector2.zero) ? deceleration : acceleration;
+        currentVelocity = Vector2.MoveTowards(currentVelocity, targetVelocity, rate * Time.deltaTime);
     }
 
-    private void FixedUpdate()
+    void FixedUpdate()
     {
-        rb.MovePosition(rb.position + moveInput * moveSpeed * Time.fixedDeltaTime);
+        rb.MovePosition(rb.position + currentVelocity * Time.fixedDeltaTime);
     }
 }

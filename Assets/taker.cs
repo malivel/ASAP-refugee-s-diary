@@ -14,4 +14,5 @@ public class taker : MonoBehaviour
             eventer.Invoke();
         }
     }
+    
 }
