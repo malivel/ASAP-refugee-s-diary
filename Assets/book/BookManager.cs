@@ -5,6 +5,7 @@ using UnityEngine.SceneManagement;
 public class BookManager : MonoBehaviour
 {
     public AudioSource audioSource;
+
     [Header("UI")]
     [SerializeField] private Button bookButton;
     [SerializeField] private Image bookButtonImage;
@@ -26,13 +27,14 @@ public class BookManager : MonoBehaviour
     [SerializeField] private string goodEndingScene = "GoodEnding";
     [SerializeField] private string badEndingScene = "BadEnding";
 
-    private int unlockedCount = 0;
+    private bool[] unlocked;
     private int currentPage = 0;
-
     private bool endingStarted = false;
 
     private void Start()
     {
+        unlocked = new bool[pages.Length];
+
         bookButton.onClick.AddListener(ToggleBook);
         prevButton.onClick.AddListener(PrevPage);
         nextButton.onClick.AddListener(NextPage);
@@ -41,10 +43,7 @@ public class BookManager : MonoBehaviour
         foreach (var page in pages)
         {
             page.Init();
-
-            // Подписываемся на ответ страницы
             page.Answered += OnPageAnswered;
-
             page.gameObject.SetActive(false);
         }
 
@@ -52,35 +51,60 @@ public class BookManager : MonoBehaviour
         UpdateIcon();
     }
 
-    // Вызывается при игровом событии
-    public void UnlockNextPage()
+    // ===== Публичный API =====
+
+    // Открывает конкретную страницу по индексу
+    public void UnlockPage(int index)
     {
         if (endingStarted) return;
-        if (unlockedCount >= pages.Length) return;
+        if (index < 0 || index >= pages.Length)
+        {
+            Debug.LogWarning($"BookManager: неверный индекс страницы {index}");
+            return;
+        }
+        if (unlocked[index]) return;
 
-        unlockedCount++;
-
-        currentPage = unlockedCount - 1;
+        unlocked[index] = true;
+        currentPage = index;
 
         UpdateIcon();
 
         if (bookPanel.activeSelf)
-        {
             UpdateView();
+    }
+
+    // На случай, если где-то ещё остался старый вызов —
+    // открывает первую неоткрытую страницу (по порядку).
+    [System.Obsolete("Используй UnlockPage(index) — открывай нужную страницу напрямую.")]
+    public void UnlockNextPage()
+    {
+        for (int i = 0; i < unlocked.Length; i++)
+        {
+            if (!unlocked[i])
+            {
+                UnlockPage(i);
+                return;
+            }
         }
     }
 
     public void ToggleBook()
     {
-        if (bookPanel.activeSelf)
-            CloseBook();
-        else
-            OpenBook();
+        if (bookPanel.activeSelf) CloseBook();
+        else OpenBook();
     }
 
     public void OpenBook()
     {
         bookPanel.SetActive(true);
+
+        // Если текущая страница не открыта — прыгаем на первую открытую
+        if (!unlocked[currentPage])
+        {
+            int first = FindNextUnlocked(-1);
+            if (first >= 0) currentPage = first;
+        }
+
         UpdateView();
     }
 
@@ -91,94 +115,95 @@ public class BookManager : MonoBehaviour
 
     public void NextPage()
     {
-        if (currentPage < unlockedCount - 1)
-        {
-            audioSource.Play();
-            currentPage++;
-            UpdateView();
-        }
+        int next = FindNextUnlocked(currentPage);
+        if (next < 0) return;
+
+        audioSource.Play();
+        currentPage = next;
+        UpdateView();
     }
 
     public void PrevPage()
     {
-        if (currentPage > 0)
-        {
-            audioSource.Play();
-            currentPage--;
-            UpdateView();
-        }
+        int prev = FindPrevUnlocked(currentPage);
+        if (prev < 0) return;
+
+        audioSource.Play();
+        currentPage = prev;
+        UpdateView();
     }
 
-    private void UpdateView()
-    {
-        for (int i = 0; i < pages.Length; i++)
-        {
-            pages[i].gameObject.SetActive(
-                i == currentPage && i < unlockedCount
-            );
-        }
-
-        prevButton.interactable = currentPage > 0;
-
-        nextButton.interactable =
-            currentPage < unlockedCount - 1;
-    }
-
-    private void UpdateIcon()
-    {
-        bookButtonImage.sprite =
-            unlockedCount > 0
-                ? filledBookSprite
-                : emptyBookSprite;
-    }
+    // ===== Проверки состояния =====
 
     public bool AllPagesAnswered()
     {
-        if (unlockedCount < pages.Length)
-            return false;
-
-        foreach (var page in pages)
+        for (int i = 0; i < pages.Length; i++)
         {
-            if (!page.IsAnswered)
-                return false;
+            if (!unlocked[i]) return false;
+            if (!pages[i].IsAnswered) return false;
         }
-
         return true;
     }
 
     public bool AllAnswersCorrect()
     {
-        if (!AllPagesAnswered())
-            return false;
+        if (!AllPagesAnswered()) return false;
 
         foreach (var page in pages)
         {
-            if (!page.IsCorrect)
-                return false;
+            if (!page.IsCorrect) return false;
         }
-
         return true;
     }
 
-    // Вызывается после выбора галочки
+    // ===== Внутренняя логика =====
+
+    private void UpdateView()
+    {
+        for (int i = 0; i < pages.Length; i++)
+        {
+            pages[i].gameObject.SetActive(i == currentPage && unlocked[i]);
+        }
+        prevButton.interactable = FindPrevUnlocked(currentPage) >= 0;
+        nextButton.interactable = FindNextUnlocked(currentPage) >= 0;
+    }
+
+    private void UpdateIcon()
+    {
+        bool anyUnlocked = false;
+        for (int i = 0; i < unlocked.Length; i++)
+        {
+            if (unlocked[i]) { anyUnlocked = true; break; }
+        }
+
+        bookButtonImage.sprite = anyUnlocked ? filledBookSprite : emptyBookSprite;
+    }
+
+    private int FindPrevUnlocked(int from)
+    {
+        for (int i = from - 1; i >= 0; i--)
+            if (unlocked[i]) return i;
+        return -1;
+    }
+
+    private int FindNextUnlocked(int from)
+    {
+        for (int i = from + 1; i < pages.Length; i++)
+            if (unlocked[i]) return i;
+        return -1;
+    }
+
     private void OnPageAnswered(BookPage page)
     {
         if (endingStarted) return;
-
-        // Ждём заполнения всех страниц
         if (!AllPagesAnswered()) return;
 
         endingStarted = true;
 
-        // Выбираем концовку
         if (AllAnswersCorrect())
-        {
             SceneManager.LoadScene(goodEndingScene);
-        }
         else
-        {
             SceneManager.LoadScene(badEndingScene);
-        }
     }
 
     private void OnDestroy()
@@ -188,9 +213,7 @@ public class BookManager : MonoBehaviour
         foreach (var page in pages)
         {
             if (page != null)
-            {
                 page.Answered -= OnPageAnswered;
-            }
         }
     }
 }
